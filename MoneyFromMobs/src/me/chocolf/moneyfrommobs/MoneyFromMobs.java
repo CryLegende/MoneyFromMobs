@@ -201,7 +201,17 @@ public class MoneyFromMobs extends JavaPlugin{
 	// checks if server is running Paper 1.13+
 	public boolean isUsingPaper() {
 		String version = getServer().getVersion();
-		return version.contains("Paper") || version.contains("Purpur");
+		if (version.contains("Paper") || version.contains("Purpur")) return true;
+
+		// Some Paper forks (DivineMC for example) don't put their name in the version string,
+		// so also look for the Paper event used by PaperListeners
+		try {
+			Class.forName("org.bukkit.event.player.PlayerAttemptPickupItemEvent");
+			return true;
+		}
+		catch (ClassNotFoundException e) {
+			return false;
+		}
 	}
 
 	public MythicMobsFileManager getMMConfig() {
