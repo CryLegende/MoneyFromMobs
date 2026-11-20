@@ -105,6 +105,8 @@ public class MessageManager {
 			armorStand.setCustomName(applyColour(messageToSend));
 			armorStand.setCustomNameVisible(true);
 			armorStand.setMetadata("mfmas", new FixedMetadataValue(this.plugin, "mfmas"));
+			// never saved with its chunk: a chunk unload or a server stop before the removal task left it forever
+			armorStand.setPersistent(false);
 		});
 
 		if (moveFloatingTextMessageUpwards) {
