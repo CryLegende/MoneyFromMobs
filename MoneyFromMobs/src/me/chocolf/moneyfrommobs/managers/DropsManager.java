@@ -9,7 +9,6 @@ import io.lumine.mythic.bukkit.MythicBukkit;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
-import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Ageable;
 import org.bukkit.entity.Entity;
@@ -18,12 +17,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.metadata.FixedMetadataValue;
-import org.bukkit.persistence.PersistentDataType;
 
 import dev.rosewood.rosestacker.utils.PersistentDataUtils;
 import me.chocolf.moneyfrommobs.MoneyFromMobs;
 import me.chocolf.moneyfrommobs.utils.RandomNumberUtils;
-import me.chocolf.moneyfrommobs.utils.VersionUtils;
 
 public class DropsManager {
 	
@@ -238,24 +235,6 @@ public class DropsManager {
 	}
 
 	public String getSpawnReason(Entity entity){
-		if (VersionUtils.getVersionNumber() > 13 ){
-			try {
-				String spawnReason = entity.getPersistentDataContainer().get(new NamespacedKey(plugin, "MfMSpawnReason"), PersistentDataType.STRING);
-				if (spawnReason != null)
-					return spawnReason;
-			}
-			catch(Exception e) {
-				return null;
-			}
-		}
-		else if (entity.hasMetadata("MfMSpawnReason")){
-			try {
-				return entity.getMetadata("MfMSpawnReason").get(0).value().toString();
-			}
-			catch(Exception e) {
-				return null;
-			}
-		}
 		if (roseStackerSupport) {
 			try{
 				return PersistentDataUtils.getEntitySpawnReason(entity).toString();
@@ -264,7 +243,8 @@ public class DropsManager {
 				return null;
 			}
 		}
-		return null;
+		// kept by the server itself with every entity: nothing to write at each spawn
+		return entity.getEntitySpawnReason().name();
 	}
 
 	public boolean doesMoneyDropOnGround() {

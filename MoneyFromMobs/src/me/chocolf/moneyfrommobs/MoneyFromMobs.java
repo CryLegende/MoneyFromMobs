@@ -3,7 +3,6 @@ package me.chocolf.moneyfrommobs;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.List;
 
 import me.chocolf.moneyfrommobs.commands.*;
 import me.chocolf.moneyfrommobs.integrations.WorldGuardFlags;
@@ -11,9 +10,6 @@ import me.chocolf.moneyfrommobs.listeners.*;
 import me.chocolf.moneyfrommobs.managers.*;
 import me.chocolf.moneyfrommobs.runnables.RepeatingMultiplierEvent;
 import org.bukkit.Bukkit;
-import org.bukkit.World;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.Entity;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -23,7 +19,6 @@ import me.chocolf.moneyfrommobs.integrations.MythicMobsFileManager;
 import me.chocolf.moneyfrommobs.runnables.NearEntitiesRunnable;
 import me.chocolf.moneyfrommobs.utils.ConfigUpdater;
 import me.chocolf.moneyfrommobs.utils.Metrics;
-import me.chocolf.moneyfrommobs.utils.UpdateChecker;
 import me.chocolf.moneyfrommobs.utils.VersionUtils;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.permission.Permission;
@@ -62,8 +57,6 @@ public class MoneyFromMobs extends JavaPlugin{
 		// listeners
 		new PickUpListeners(this);
 		new DeathListeners(this);
-		new MobSpawnListener(this);
-		new OnJoinListener(this);
 		new HopperListeners(this);
 		if (VersionUtils.getVersionNumber() > 13)
 			new PlaceMinecartHopperListener(this);
@@ -106,14 +99,6 @@ public class MoneyFromMobs extends JavaPlugin{
 		// Bukkit runnable for Repeating Multiplier Event
 		loadRepeatingMultiplierEvent();
 		
-		// Checks if user is using the latest version of the plugin on spigot
-		try {
-			if (UpdateChecker.checkForUpdate())
-				getLogger().info("Update Available for MoneyFromMobs: https://www.spigotmc.org/resources/money-from-mobs-1-12-1-20-5.79137/");
-		}
-		catch (Exception e) {
-			getLogger().warning("Unable to retrieve latest update from SpigotMC.org");
-		}
 	}
 	
 	@Override
@@ -126,18 +111,9 @@ public class MoneyFromMobs extends JavaPlugin{
 	
 	@Override
 	public void onDisable() {
-		List<World> worldList = Bukkit.getServer().getWorlds();
-		for (World world : worldList) {
-			List<Entity> entList = world.getEntities();
-			for (Entity entity : entList) {
-				if ( entity instanceof ArmorStand ) {
-					ArmorStand armorstand = (ArmorStand) entity;
-					if (armorstand.hasMetadata("mfmas")) {
-						armorstand.remove();
-					}
-				}
-			}
-		}
+		// floating texts are client-side only: removed from the clients still showing one
+		if (messageManager != null)
+			messageManager.clearFloatingTexts();
 	}
 
 	// sets up economy if server has Vault and an Economy plugin

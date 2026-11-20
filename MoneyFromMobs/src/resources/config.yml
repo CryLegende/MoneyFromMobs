@@ -110,6 +110,9 @@ ShowMessageAsFloatingText:
   Movement: true
   # Time in seconds before the floating text message vanishes
   Duration: 1
+  # Whether money earned while a message is still shown is added to it instead of showing a new one.
+  # The message is shown only to the player who earns the money, as a text that exists on his client only.
+  Combine: true
 
 # Messages sent when using /MfmMute
 MuteToggleOnMessage: '&cMessages will no longer be shown when you pick up money dropped by mobs!'

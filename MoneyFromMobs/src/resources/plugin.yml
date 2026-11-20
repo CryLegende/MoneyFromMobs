@@ -5,7 +5,7 @@ api-version: 1.13
 author: Chocolf
 description: Makes mobs drop money with looting multiplier
 depend: [Vault]
-softdepend: [PlaceholderAPI,InfernalMobs,WorldEdit,WorldGuard,MythicMobs,RoseStacker,LevelledMobs,Guilds]
+softdepend: [PlaceholderAPI,InfernalMobs,WorldEdit,WorldGuard,MythicMobs,RoseStacker,LevelledMobs,Guilds,packetevents]
 commands:
   MfmHelp:
     description: Displays all commands for Money From Mobs
@@ -29,7 +29,7 @@ commands:
     permission: MoneyFromMobs.mute
     usage: "Usage: /MfmMute"
   MfmClear:
-    description: Clears all money from the ground. Can also be used to remove glitched holographic messages by standing right next to the message and using the command
+    description: Clears all money from the ground
     permission: MoneyFromMobs.clear
     usage: "Usage: /MfmClear"
   MfmEvent:

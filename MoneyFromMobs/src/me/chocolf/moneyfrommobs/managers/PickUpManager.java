@@ -1,6 +1,5 @@
 package me.chocolf.moneyfrommobs.managers;
 
-import java.lang.reflect.Field;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -17,8 +16,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 
-import com.mojang.authlib.GameProfile;
-import com.mojang.authlib.properties.Property;
+import com.destroystokyo.paper.profile.PlayerProfile;
+import com.destroystokyo.paper.profile.ProfileProperty;
 
 import me.chocolf.moneyfrommobs.MoneyFromMobs;
 import me.chocolf.moneyfrommobs.api.events.GiveMoneyEvent;
@@ -76,7 +75,7 @@ public class PickUpManager {
 		}
 		// Makes item glow if it is enabled
 		if (config.getBoolean("MoneyDropsOnGround.Enchanted")){
-			itemToDrop.addUnsafeEnchantment(Enchantment.DURABILITY, 1);
+			itemToDrop.addUnsafeEnchantment(Enchantment.UNBREAKING, 1);
 			meta = itemToDrop.getItemMeta();
 			meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
 			itemToDrop.setItemMeta(meta);
@@ -141,20 +140,13 @@ public class PickUpManager {
 			}
 		}
 
-		// spawn particle
+		// spawn particle, for the player who earns the money only (like the sound and the messages)
 		if (particleEffect != null) {
 			loc.setY(loc.getY()+3);
-			p.getWorld().spawnParticle(this.getParticleEffect(), loc, this.getNumberOfParticles());
+			p.spawnParticle(this.getParticleEffect(), loc, this.getNumberOfParticles());
 		}
 
-		// convert amount to string ready to place it in message
-		String strAmount = String.format("%.2f", amount);
-
-		// take off decimal place if enabled in config
-		if (plugin.getDropsManager().shouldDisableDecimal())
-			strAmount = String.format("%.0f", amount);
-
-		plugin.getMessageManager().sendMessage(strAmount,p);
+		plugin.getMessageManager().sendMessage(amount, p);
 
 	}
 
@@ -174,28 +166,14 @@ public class PickUpManager {
 		return matcher.find();
 	}
 
-	@SuppressWarnings("deprecation")
 	private ItemStack getCustomHead(String value) {
-		ItemStack head;
-		if (VersionUtils.getVersionNumber() > 12) {
-			head = new ItemStack(Material.PLAYER_HEAD, 1);
-		}
-		else {
-			head = new ItemStack(Material.valueOf("SKULL_ITEM"),1,(short) 3);
-		}
-	    SkullMeta meta = (SkullMeta) head.getItemMeta();
-	    GameProfile profile = new GameProfile(UUID.randomUUID(), "");
-	    profile.getProperties().put("textures", new Property("textures", value));
-	    Field profileField;
-	    try {
-	        profileField = meta.getClass().getDeclaredField("profile");
-	        profileField.setAccessible(true);
-	        profileField.set(meta, profile);
-	    } catch (IllegalArgumentException | IllegalAccessException | NoSuchFieldException | SecurityException e) {
-	        e.printStackTrace();
-	    }
-	    head.setItemMeta(meta);
-	    return head;
+		ItemStack head = new ItemStack(Material.PLAYER_HEAD, 1);
+		SkullMeta meta = (SkullMeta) head.getItemMeta();
+		PlayerProfile profile = Bukkit.createProfile(UUID.randomUUID(), "");
+		profile.setProperty(new ProfileProperty("textures", value));
+		meta.setPlayerProfile(profile);
+		head.setItemMeta(meta);
+		return head;
 	}
 
 	public ItemStack getItemToDrop() {
