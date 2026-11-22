@@ -3,12 +3,12 @@ package me.chocolf.moneyfrommobs.display;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 
 import org.bukkit.Bukkit;
@@ -46,6 +46,10 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
  * client moves it up by itself, through the display position interpolation), and a destroy packet, all sent to that
  * one player. While a text is still shown, the next amounts are added to it instead of spawning a new one. A task
  * runs only while texts are shown, to remove them.
+ * <p>
+ * Money is earned on the thread of the player's world (parallel world ticking), the task runs on the main thread:
+ * each player's texts change only inside an atomic {@code compute} on the map, so a text can never be lost before
+ * its destroy packet is sent (a lost one would stay frozen in the air on that client).
  */
 public final class FloatingTexts implements Listener {
 
@@ -81,9 +85,9 @@ public final class FloatingTexts implements Listener {
 	private final Plugin plugin;
 	private final Settings settings;
 	private final BiFunction<Player, Double, String> format;
-	private final Map<UUID, Deque<Shown>> shown = new HashMap<>();
+	private final Map<UUID, Deque<Shown>> shown = new ConcurrentHashMap<>();
 	private BukkitTask task;
-	private long tick;
+	private volatile long tick;
 
 	private static final class Shown {
 		final int id = SpigotReflectionUtil.generateEntityId();
@@ -106,7 +110,16 @@ public final class FloatingTexts implements Listener {
 	public void show(Player player, double amount) {
 		int duration = Math.max(1, settings.durationTicks());
 		Location at = frontOf(player);
-		Deque<Shown> texts = shown.computeIfAbsent(player.getUniqueId(), uuid -> new ArrayDeque<>());
+		shown.compute(player.getUniqueId(), (uuid, texts) -> {
+			Deque<Shown> list = texts == null ? new ArrayDeque<>() : texts;
+			show(player, list, amount, at, duration);
+			return list;
+		});
+		startTask();
+	}
+
+	private void show(Player player, Deque<Shown> texts, double amount, Location at, int duration) {
+		long tick = this.tick;
 		Shown last = texts.peekLast();
 		List<PacketWrapper<?>> packets = new ArrayList<>(6);
 		if (settings.combine() && last != null && last.removeAt > tick) {
@@ -133,6 +146,9 @@ public final class FloatingTexts implements Listener {
 			texts.addLast(text);
 		}
 		send(player, packets);
+	}
+
+	private synchronized void startTask() {
 		if (task == null) {
 			task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
 		}
@@ -150,57 +166,66 @@ public final class FloatingTexts implements Listener {
 	}
 
 	private void tick() {
-		tick++;
-		for (Iterator<Map.Entry<UUID, Deque<Shown>>> players = shown.entrySet().iterator(); players.hasNext(); ) {
-			Map.Entry<UUID, Deque<Shown>> entry = players.next();
-			Player player = Bukkit.getPlayer(entry.getKey());
-			if (player == null) {
-				players.remove();
-				continue;
-			}
-			for (Iterator<Shown> it = entry.getValue().iterator(); it.hasNext(); ) {
-				Shown text = it.next();
-				if (text.removeAt <= tick) {
-					it.remove();
-					send(player, List.of(new WrapperPlayServerDestroyEntities(text.id)));
+		long now = ++tick;
+		for (UUID uuid : shown.keySet()) {
+			shown.computeIfPresent(uuid, (key, texts) -> {
+				Player player = Bukkit.getPlayer(key);
+				if (player == null) {
+					return null;
 				}
-			}
-			if (entry.getValue().isEmpty()) {
-				players.remove();
+				for (Iterator<Shown> it = texts.iterator(); it.hasNext(); ) {
+					Shown text = it.next();
+					if (text.removeAt <= now) {
+						it.remove();
+						send(player, List.of(new WrapperPlayServerDestroyEntities(text.id)));
+					}
+				}
+				return texts.isEmpty() ? null : texts;
+			});
+		}
+		synchronized (this) {
+			if (shown.isEmpty() && task != null) {
+				task.cancel();
+				task = null;
 			}
 		}
-		if (shown.isEmpty() && task != null) {
-			task.cancel();
-			task = null;
-		}
+	}
+
+	/** Removes the player's texts from his client, then forgets them. */
+	private void drop(UUID uuid) {
+		shown.computeIfPresent(uuid, (key, texts) -> {
+			Player player = Bukkit.getPlayer(key);
+			if (player != null && !texts.isEmpty()) {
+				send(player, List.of(new WrapperPlayServerDestroyEntities(texts.stream().mapToInt(text -> text.id).toArray())));
+			}
+			return null;
+		});
 	}
 
 	/** Removes every text from the clients (plugin disabled). */
 	public void clear() {
-		for (Map.Entry<UUID, Deque<Shown>> entry : shown.entrySet()) {
-			Player player = Bukkit.getPlayer(entry.getKey());
-			if (player != null && !entry.getValue().isEmpty()) {
-				send(player, List.of(new WrapperPlayServerDestroyEntities(
-						entry.getValue().stream().mapToInt(text -> text.id).toArray())));
-			}
+		for (UUID uuid : shown.keySet()) {
+			drop(uuid);
 		}
-		shown.clear();
-		if (task != null) {
-			task.cancel();
-			task = null;
+		synchronized (this) {
+			if (task != null) {
+				task.cancel();
+				task = null;
+			}
 		}
 		HandlerList.unregisterAll(this);
 	}
 
-	/** The client drops its entities on a world change and on quit: nothing to send then. */
+	/** Gone: nothing to send. */
 	@EventHandler
 	public void onQuit(PlayerQuitEvent event) {
 		shown.remove(event.getPlayer().getUniqueId());
 	}
 
+	/** The client has dropped its entities with the old world; the destroy costs nothing and leaves nothing to chance. */
 	@EventHandler
 	public void onWorldChange(PlayerChangedWorldEvent event) {
-		shown.remove(event.getPlayer().getUniqueId());
+		drop(event.getPlayer().getUniqueId());
 	}
 
 	/** Same place as the old armor stand: four blocks ahead of the player, at the configured height. */
